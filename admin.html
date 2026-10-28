@@ -1,0 +1,36 @@
+<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Admin Undangan</title>
+<style>body{font:15px/1.5 system-ui,sans-serif;background:#f1ede0;color:#3b3a35;margin:0;padding:16px}main{max-width:720px;margin:auto}.c{background:#fff;border-radius:14px;padding:16px;margin:12px 0}input,textarea{width:100%;padding:9px;border:1px solid #cfc8b4;border-radius:10px;font:inherit;margin:4px 0}button{background:#5f7052;color:#fff;border:0;border-radius:99px;padding:8px 16px;cursor:pointer;margin:2px}button.o{background:none;color:#5f7052;border:1px solid #5f7052}.r{border-top:1px solid #eee;padding:8px 0}.g{display:flex;gap:10px}.g>div{flex:1;text-align:center}.g b{font-size:26px;display:block}</style></head><body><main>
+<h1>Panel Admin</h1><div id="st" role="status"></div>
+<form id="lg" class="c"><label>Kata sandi admin<input id="pw" type="password" autocomplete="current-password" required></label><button>Masuk</button></form>
+<div id="pn" hidden>
+<div class="c g" id="sum"></div>
+<div class="c"><b>Tambah tamu</b><input id="tn" maxlength="40" placeholder="Nama tamu"><input id="tw" placeholder="No. WhatsApp (opsional, hanya jika tamu setuju)"><button id="ta">Tambah</button><hr><b>Banyak tamu (satu per baris)</b><textarea id="bk" rows="4"></textarea><button id="tb">Tambah semua</button></div>
+<div class="c"><b>Templat pesan</b><textarea id="tp" rows="8"></textarea><button id="tps">Simpan templat</button>
+<p><label><input type="checkbox" id="vu" style="width:auto"> Tampilkan ucapan publik</label> <button id="vs" class="o">Simpan visibilitas</button></p></div>
+<div class="c"><b>Tamu</b><div id="tl"></div></div><div class="c"><b>RSVP & ucapan</b><div id="ul"></div></div>
+<button class="o" id="lo">Keluar</button></div>
+<script src="data/data-undangan.js"></script><script src="js/fb.js"></script>
+<script>
+const D=DATA_UNDANGAN,$=s=>document.querySelector(s),e=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),say=m=>$('#st').textContent=m;
+let tpl=D.templatPesan,TM=[];
+const link=n=>D.siteUrl+'?to='+encodeURIComponent(n),ev=a=>`${a.tanggal} ${a.jam} ${a.zona}, ${a.tempat}`;
+const msg=n=>tpl.replace(/\{(\w+)\}/g,(_,k)=>({nama:n,pria:D.pria.panggilan,wanita:D.wanita.panggilan,mempelai:D.pria.panggilan+' & '+D.wanita.panggilan,tanggal:D.akad.tanggal,akad:ev(D.akad),resepsi:D.resepsi&&D.resepsi.aktif?ev(D.resepsi):'-',link:link(n)})[k]??'{'+k+'}');
+const num=w=>{w=(w||'').replace(/\D/g,'');return w.startsWith('0')?'62'+w.slice(1):w};
+async function muat(){try{const[t,u,c]=await Promise.all([FB.tamu(),FB.ucapan(),FB.pengaturan()]);TM=t;if(c.templat)tpl=c.templat;$('#tp').value=tpl;$('#vu').checked=c.ucapan!==false;
+$('#sum').innerHTML=`<div><b>${t.length}</b>Tamu</div><div><b>${t.filter(x=>x.terkirim).length}</b>Terkirim</div><div><b>${u.length}</b>RSVP</div><div><b>${u.filter(x=>x.hadir=='hadir').reduce((a,x)=>a+x.jumlah,0)}</b>Orang hadir</div>`;
+$('#tl').innerHTML=t.map((x,i)=>`<div class="r"><b>${e(x.nama)}</b> ${x.terkirim?'✓':''}<br><small>${e(link(x.nama))}</small><br><button data-k="${i}">Kirim WhatsApp</button><button class="o" data-s="${i}">Salin pesan</button><button class="o" data-h="${x.id}">Hapus</button></div>`).join('')||'Belum ada tamu.';
+$('#ul').innerHTML=u.map(x=>`<div class="r"><b>${e(x.nama)}</b> · ${e(x.hadir)} · ${x.jumlah} orang<br>${e(x.pesan)}<br><button class="o" data-u="${x.id}">Hapus</button></div>`).join('')||'Belum ada.'}catch(x){say('Gagal memuat: '+x.message)}}
+document.body.onclick=async b=>{b=b.target;try{
+if(b.dataset.k){const t=TM[b.dataset.k];window.open(`https://wa.me/${num(t.wa)}?text=${encodeURIComponent(msg(t.nama))}`,'_blank','noopener');await FB.tandaiKirim(t.id);muat()}
+if(b.dataset.s){await navigator.clipboard.writeText(msg(TM[b.dataset.s].nama));say('Pesan disalin')}
+if(b.dataset.h&&confirm('Hapus tamu ini?')){await FB.hapusTamu(b.dataset.h);muat()}
+if(b.dataset.u&&confirm('Hapus ucapan ini?')){await FB.hapusUcapan(b.dataset.u);muat()}}catch(x){say('Gagal: '+x.message)}};
+$('#lg').onsubmit=async x=>{x.preventDefault();say('Masuk…');try{await FB.login($('#pw').value);say('')}catch(er){say('Login gagal: '+er.message)}};
+if(FB.ok())FB.onAuth(u=>{$('#lg').hidden=!!u;$('#pn').hidden=!u;if(u)muat()}).catch(x=>say(x.message));else say('Firebase belum dikonfigurasi di data/data-undangan.js');
+$('#lo').onclick=()=>FB.logout();
+const add=async l=>{for(const n of l){const[a,w]=n.split('|').map(s=>s.trim());if(a)await FB.tambahTamu({nama:a.slice(0,40),wa:w||''})}muat()};
+$('#ta').onclick=()=>add([$('#tn').value+'|'+$('#tw').value]).then(()=>{$('#tn').value=$('#tw').value=''}).catch(x=>say(x.message));
+$('#tb').onclick=()=>add($('#bk').value.split('\n')).then(()=>$('#bk').value='').catch(x=>say(x.message));
+$('#tps').onclick=()=>FB.simpanPengaturan({templat:$('#tp').value}).then(()=>{tpl=$('#tp').value;say('Templat tersimpan')}).catch(x=>say(x.message));
+$('#vs').onclick=()=>FB.simpanPengaturan({ucapan:$('#vu').checked}).then(()=>say('Tersimpan')).catch(x=>say(x.message));
+</script></main></body></html>

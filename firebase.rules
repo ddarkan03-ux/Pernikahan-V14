@@ -1,0 +1,32 @@
+// STATUS: BELUM DIUJI. Uji dengan Firebase Emulator Suite sebelum produksi.
+// Ganti 'DEMO01' dengan kode undangan Anda (tambahkan kode lain di daftar jika perlu).
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function kodeSah(k) { return k in ['DEMO01']; }
+    function admin(k) { return kodeSah(k) && request.auth != null && request.auth.token.email == k.lower() + '@admin.undangan'; }
+    function ucapanValid() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['nama','hadir','jumlah','pesan','waktu'])
+        && d.nama is string && d.nama.size() > 0 && d.nama.size() <= 40
+        && d.pesan is string && d.pesan.size() <= 300
+        && d.hadir in ['hadir','tidak','ragu']
+        && d.jumlah is int && d.jumlah >= 0 && d.jumlah <= 10
+        && d.waktu == request.time;
+    }
+    match /undangan/{k}/ucapan/{id} {
+      allow read: if kodeSah(k);
+      allow create: if kodeSah(k) && ucapanValid();
+      allow update: if false;
+      allow delete: if admin(k);
+    }
+    match /undangan/{k}/tamu/{id} {
+      allow read, write: if admin(k);
+    }
+    match /undangan/{k}/pengaturan/{id} {
+      allow read: if kodeSah(k);
+      allow write: if admin(k);
+    }
+    match /{path=**} { allow read, write: if false; }
+  }
+}
